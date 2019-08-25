@@ -144,23 +144,41 @@ enum Rtl28xxTunerType {
                 @NonNull
                 @Override
                 public Rtl28xxSlaveType getSlave(Resources resources, Rtl28xxDvbDevice device) throws DvbException {
-                    /* power on MN88472 demod on GPIO0 */
+                    /* power off slave demod on GPIO0 to reset CXD2837ER */
+                    device.wrReg(Rtl28xxConst.SYS_GPIO_OUT_VAL, 0x00, 0x01);
+                    device.wrReg(Rtl28xxConst.SYS_GPIO_OUT_EN, 0x00, 0x01);
+
+                    /* power on slave demod on GPIO0 */
                     device.wrReg(Rtl28xxConst.SYS_GPIO_OUT_VAL, 0x01, 0x01);
                     device.wrReg(Rtl28xxConst.SYS_GPIO_DIR, 0x00, 0x01);
                     device.wrReg(Rtl28xxConst.SYS_GPIO_OUT_EN, 0x01, 0x01);
 
-                    /* check MN88472 answers */
                     byte[] data = new byte[1];
 
-                    device.ctrlMsg(0xff38, Rtl28xxConst.CMD_I2C_RD, data);
-                    switch (data[0]) {
-                        case 0x02:
-                            return Rtl28xxSlaveType.SLAVE_DEMOD_MN88472;
-                        case 0x03:
-                            return Rtl28xxSlaveType.SLAVE_DEMOD_MN88473;
-                        default:
-                            throw new DvbException(DVB_DEVICE_UNSUPPORTED, resources.getString(R.string.unsupported_slave_on_tuner));
+                    try {
+                        /* check MN8847x answers */
+                        device.ctrlMsg(0xff38, Rtl28xxConst.CMD_I2C_RD, data);
+                        switch (data[0]) {
+                            case 0x02:
+                                return Rtl28xxSlaveType.SLAVE_DEMOD_MN88472;
+                            case 0x03:
+                                return Rtl28xxSlaveType.SLAVE_DEMOD_MN88473;
+                        }
+                    } catch (DvbException e) {
+                        // Do nothing
                     }
+
+                    try {
+                        /* check CXD2837ER answer */
+                        device.ctrlMsg(0xfdd8, Rtl28xxConst.CMD_I2C_RD, data);
+                        if (data[0] == (byte)0xb1) {
+                            return Rtl28xxSlaveType.SLAVE_DEMOD_CXD2837ER;
+                        }
+                    } catch (DvbException e) {
+                        // Do nothing
+                    }
+
+                    throw new DvbException(DVB_DEVICE_UNSUPPORTED, resources.getString(R.string.unsupported_slave_on_tuner));
                 }
             }, new DvbTunerCreator() {
                 @NonNull
